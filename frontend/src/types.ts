@@ -1,6 +1,19 @@
 export type TabId = 'dashboard' | 'candidates' | 'whitelist' | 'logs' | 'settings';
 export type Lang = 'de' | 'en';
 export type Theme = 'light' | 'dark';
+export type UpdateChannel = 'release' | 'beta' | 'nightly';
+
+export interface UpdateCheckResult {
+  updateAvailable: boolean;
+  currentVersion: string;
+  latestVersion: string | null;
+  latestChannel: UpdateChannel;
+  selectedChannel: UpdateChannel;
+  dockerTag: string;
+  releaseUrl: string | null;
+  checkedAt: string;
+  error: string | null;
+}
 
 export interface AppMeta {
   productName: string;
@@ -82,11 +95,13 @@ export interface AppSettingsDto {
   inactivityDays: number;
   scanIntervalDays: number;
   dryRun: boolean;
+  autoDeleteOnScan: boolean;
   deleteEmptyFolders: boolean;
   discordWebhookUrl: string;
   appPublicUrl: string;
   pathMappings: PathMappingRule[];
   excludedLibraries: string[];
+  updateChannel: UpdateChannel;
   lastScanAt: string | null;
   nextScanAt: string | null;
 }

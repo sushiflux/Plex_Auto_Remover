@@ -18,6 +18,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:11.0 AS runtime
 WORKDIR /app
 COPY --from=backend-build /out ./
 COPY --from=frontend-build /src/frontend/dist ./wwwroot
+COPY docs/handbuch/*.pdf ./docs/handbuch/
 COPY version.txt ./version.txt
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

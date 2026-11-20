@@ -25,6 +25,23 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", ct);
         await db.Database.ExecuteSqlRawAsync("PRAGMA quick_check;", ct);
 
+        // Lightweight column migration for existing SQLite databases
+        foreach (var sql in new[]
+        {
+            "ALTER TABLE Settings ADD COLUMN UpdateChannel TEXT NOT NULL DEFAULT 'release';",
+            "ALTER TABLE Settings ADD COLUMN AutoDeleteOnScan INTEGER NOT NULL DEFAULT 0;"
+        })
+        {
+            try
+            {
+                await db.Database.ExecuteSqlRawAsync(sql, ct);
+            }
+            catch
+            {
+                // Column already exists
+            }
+        }
+
         if (!await db.Settings.AnyAsync(ct))
         {
             db.Settings.Add(new AppSettings

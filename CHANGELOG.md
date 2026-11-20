@@ -6,6 +6,16 @@
 
 ## English
 
+## v2026.11.2.11.1167 · Unraid
+
+#### ✨ New
+- Three update channels in Settings: choose between Release, Beta (blue badge), and Nightly (purple badge) and check for new versions directly.
+- Automatic deletion after scheduled scans: optionally delete unprotected findings automatically without manual confirmation.
+- Built-in PDF manual: open the German or English manual directly in the browser or download it as a PDF via the book icon in the sidebar.
+
+#### 🔄 Changed
+- Redesigned About dialog & neutral app icon: displays version, active update channel, and expandable third-party Open Source licenses alongside a standalone app icon.
+
 ## v2026.11.1.14.5747 · Unraid
 
 #### ✨ New
@@ -17,6 +27,16 @@
 ---
 
 ## Deutsch
+
+## v2026.11.2.11.1167 · Unraid
+
+#### ✨ Neu
+- Drei Update-Kanäle in den Einstellungen: Du kannst jetzt zwischen Release, Beta (blaues Badge) und Nightly (lilafarbenes Badge) wählen und direkt nach neuen Versionen suchen.
+- Automatisches Löschen nach geplantem Scan: Auf Wunsch löscht ein geplanter Scan ungeschützte Funde direkt automatisch ohne manuelle Rückfrage.
+- Eingebautes PDF-Handbuch: Über das Buch-Symbol unten in der Seitenleiste öffnest du das Handbuch auf Deutsch oder Englisch direkt im Browser oder lädst es als PDF herunter.
+
+#### 🔄 Geändert
+- Überarbeitetes Info-Fenster & neutrales App-Symbol: Das Fenster hinter dem Info-Symbol zeigt nun Version, aktiven Update-Kanal und aufklappbare Open-Source-Lizenzen neben einem eigenständigen App-Symbol.
 
 ## v2026.11.1.14.5747 · Unraid
 

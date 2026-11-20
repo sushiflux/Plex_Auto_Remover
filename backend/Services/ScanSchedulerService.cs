@@ -47,6 +47,20 @@ public sealed class ScanSchedulerService(
 
         var scanner = scope.ServiceProvider.GetRequiredService<ScannerService>();
         logger.LogInformation("Starting scheduled Plex scan");
-        await scanner.RunScanAsync(sendNotification: true, ct);
+        var summary = await scanner.RunScanAsync(sendNotification: true, ct);
+
+        if (settings.AutoDeleteOnScan && summary.CandidateCount > 0)
+        {
+            var pendingIds = await db.Candidates
+                .Where(c => c.Status == "pending")
+                .Select(c => c.Id)
+                .ToListAsync(ct);
+
+            if (pendingIds.Count > 0)
+            {
+                logger.LogInformation("AutoDeleteOnScan enabled: deleting {Count} candidates automatically", pendingIds.Count);
+                await scanner.ExecuteDeletionsAsync(pendingIds, dryRunOverride: null, ct);
+            }
+        }
     }
 }

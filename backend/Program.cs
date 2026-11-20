@@ -21,9 +21,11 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
 
 builder.Services.AddHttpClient("plex");
 builder.Services.AddHttpClient("discord");
+builder.Services.AddHttpClient("github");
 builder.Services.AddScoped<PlexClient>();
 builder.Services.AddScoped<DiscordWebhookService>();
 builder.Services.AddScoped<ScannerService>();
+builder.Services.AddSingleton<UpdateCheckService>();
 builder.Services.AddHostedService<ScanSchedulerService>();
 
 var app = builder.Build();
@@ -32,7 +34,7 @@ var app = builder.Build();
 app.Use(async (ctx, next) =>
 {
     ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
-    ctx.Response.Headers["X-Frame-Options"] = "DENY";
+    ctx.Response.Headers["X-Frame-Options"] = "SAMEORIGIN";
     ctx.Response.Headers["Referrer-Policy"] = "no-referrer";
     ctx.Response.Headers["Cross-Origin-Opener-Policy"] = "same-origin";
     ctx.Response.Headers["Cross-Origin-Resource-Policy"] = "same-origin";
@@ -174,11 +176,13 @@ app.MapGet("/api/settings", async (AppDbContext db, CancellationToken ct) =>
         inactivityDays = s.InactivityDays,
         scanIntervalDays = s.ScanIntervalDays,
         dryRun = s.DryRun,
+        autoDeleteOnScan = s.AutoDeleteOnScan,
         deleteEmptyFolders = s.DeleteEmptyFolders,
         discordWebhookUrl = s.DiscordWebhookUrl,
         appPublicUrl = s.AppPublicUrl,
         pathMappings = mappings,
         excludedLibraries = excluded,
+        updateChannel = s.UpdateChannel,
         lastScanAt = s.LastScanAt,
         nextScanAt = s.NextScanAt
     });
@@ -206,11 +210,13 @@ app.MapPut("/api/settings", async (UpdateSettingsRequest req, AppDbContext db, C
     s.InactivityDays = req.InactivityDays;
     s.ScanIntervalDays = req.ScanIntervalDays;
     s.DryRun = req.DryRun;
+    s.AutoDeleteOnScan = req.AutoDeleteOnScan;
     s.DeleteEmptyFolders = req.DeleteEmptyFolders;
     s.DiscordWebhookUrl = req.DiscordWebhookUrl?.Trim() ?? string.Empty;
     s.AppPublicUrl = req.AppPublicUrl?.Trim() ?? string.Empty;
     s.PathMappingsJson = JsonSerializer.Serialize(req.PathMappings ?? []);
     s.ExcludedLibrariesJson = JsonSerializer.Serialize(req.ExcludedLibraries ?? []);
+    s.UpdateChannel = req.UpdateChannel is "beta" or "nightly" ? req.UpdateChannel : "release";
     s.NextScanAt ??= DateTimeOffset.UtcNow.AddDays(s.ScanIntervalDays);
 
     await db.SaveChangesAsync(ct);
@@ -259,6 +265,47 @@ app.MapPost("/api/scan", async (ScanRequest? req, ScannerService scanner, Cancel
     {
         return Results.Problem(title: "Scan failed", detail: ex.Message, statusCode: 500);
     }
+});
+
+app.MapGet("/api/updates", async (bool? force, AppDbContext db, UpdateCheckService updater, CancellationToken ct) =>
+{
+    var s = await db.Settings.AsNoTracking().FirstAsync(ct);
+    var isManual = force == true;
+    if (isDev && !isManual)
+    {
+        return Results.Ok(new UpdateCheckResult
+        {
+            UpdateAvailable = false,
+            CurrentVersion = appVersion,
+            SelectedChannel = s.UpdateChannel,
+            DockerTag = s.UpdateChannel is "beta" or "nightly" ? s.UpdateChannel : "latest",
+            CheckedAt = DateTimeOffset.UtcNow
+        });
+    }
+
+    var result = await updater.CheckAsync(appVersion, s.UpdateChannel, isManual, ct);
+    return Results.Ok(result);
+});
+
+app.MapGet("/api/manual/{lang}", (string lang, bool? download) =>
+{
+    var isDe = string.Equals(lang, "de", StringComparison.OrdinalIgnoreCase);
+    var fileName = isDe ? "Plex-Auto-Remover-Handbuch.pdf" : "Plex-Auto-Remover-Handbook.pdf";
+    var candidates = new[]
+    {
+        Path.Combine(AppContext.BaseDirectory, "docs", "handbuch", fileName),
+        Path.Combine(Directory.GetCurrentDirectory(), "..", "docs", "handbuch", fileName),
+        Path.Combine(Directory.GetCurrentDirectory(), "docs", "handbuch", fileName)
+    };
+
+    var found = candidates.FirstOrDefault(File.Exists);
+    if (found is null)
+        return Results.NotFound(new { error = $"Manual PDF '{fileName}' was not found." });
+
+    if (download == true)
+        return Results.File(found, "application/pdf", fileDownloadName: fileName);
+
+    return Results.File(found, "application/pdf");
 });
 
 app.MapGet("/api/plex/thumb", async (string path, AppDbContext db, PlexClient plex, CancellationToken ct) =>
@@ -320,11 +367,13 @@ public sealed record UpdateSettingsRequest(
     int InactivityDays,
     int ScanIntervalDays,
     bool DryRun,
+    bool AutoDeleteOnScan,
     bool DeleteEmptyFolders,
     string? DiscordWebhookUrl,
     string? AppPublicUrl,
     List<PathMappingRule>? PathMappings,
-    List<string>? ExcludedLibraries);
+    List<string>? ExcludedLibraries,
+    string? UpdateChannel);
 public sealed record TestPlexRequest(string? PlexUrl, string? PlexToken);
 public sealed record TestWebhookRequest(string? DiscordWebhookUrl);
 public sealed record ScanRequest(bool SendNotification = false);

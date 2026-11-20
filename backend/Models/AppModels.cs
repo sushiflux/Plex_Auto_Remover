@@ -8,11 +8,13 @@ public sealed class AppSettings
     public int InactivityDays { get; set; } = 90;
     public int ScanIntervalDays { get; set; } = 90;
     public bool DryRun { get; set; } = false;
+    public bool AutoDeleteOnScan { get; set; } = false;
     public bool DeleteEmptyFolders { get; set; } = true;
     public string DiscordWebhookUrl { get; set; } = string.Empty;
     public string AppPublicUrl { get; set; } = string.Empty;
     public string PathMappingsJson { get; set; } = "[]";
     public string ExcludedLibrariesJson { get; set; } = "[]";
+    public string UpdateChannel { get; set; } = "release"; // "release" | "beta" | "nightly"
     public DateTimeOffset? LastScanAt { get; set; }
     public DateTimeOffset? NextScanAt { get; set; }
 }

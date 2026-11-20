@@ -23,6 +23,7 @@ import {
   List,
   ArrowUp,
   ArrowDown,
+  BookOpen,
 } from 'lucide-react';
 import { strings, detectInitialLanguage } from './i18n';
 import { useConfirm } from './components/ConfirmDialog';
@@ -37,8 +38,26 @@ import type {
   PlexLibrarySection,
   TabId,
   Theme,
+  UpdateChannel,
+  UpdateCheckResult,
   WhitelistEntry,
 } from './types';
+
+function ChannelBadgeGlyph({ channel }: { channel: 'beta' | 'nightly' }) {
+  if (channel === 'beta') {
+    return (
+      <svg viewBox="0 0 16 16" className="w-3 h-3 block" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M5.2 13.2V5.4a2.6 2.6 0 0 1 5.2-.4c0 1.4-1.1 2.4-2.8 2.6 2 .2 3.2 1.2 3.2 2.8a2.8 2.8 0 0 1-2.9 2.8c-1.1 0-2-.5-2.7-1.2" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 16 16" className="w-3 h-3 block" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12.2 4.6c-1.2 2.3-2.3 6.8-5.3 6.8-2 0-3.1-1.5-3.1-3.4s1.1-3.4 3.1-3.4c2.4 0 3.3 4.1 4.4 6.1.3.5.7.7 1.1.7" />
+    </svg>
+  );
+}
 
 function formatBytes(bytes: number): string {
   if (bytes <= 0) return '0 B';
@@ -74,6 +93,10 @@ function readAboutFromUrl(): boolean {
   return new URLSearchParams(window.location.search).get('about') === '1';
 }
 
+function readManualFromUrl(): boolean {
+  return new URLSearchParams(window.location.search).get('manual') === '1';
+}
+
 function readLibFilterFromUrl(): string {
   return new URLSearchParams(window.location.search).get('lib') ?? 'all';
 }
@@ -105,6 +128,8 @@ function readSortDirFromUrl(): SortDir {
 export function App() {
   const [tab, setTab] = useState<TabId>(readTabFromUrl);
   const [aboutOpen, setAboutOpen] = useState<boolean>(readAboutFromUrl);
+  const [manualOpen, setManualOpen] = useState<boolean>(readManualFromUrl);
+  const [licensesOpen, setLicensesOpen] = useState<boolean>(false);
   const [libFilter, setLibFilter] = useState<string>(readLibFilterFromUrl);
   const [candidateView, setCandidateView] = useState<'list' | 'grid'>(readCandidateViewFromUrl);
   const [sortKey, setSortKey] = useState<SortKey>(readSortKeyFromUrl);
@@ -127,6 +152,8 @@ export function App() {
 
   const [scanning, setScanning] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [errorState, setErrorState] = useState<{ headline: string; details: string } | null>(null);
 
@@ -147,6 +174,7 @@ export function App() {
     const onPop = () => {
       setTab(readTabFromUrl());
       setAboutOpen(readAboutFromUrl());
+      setManualOpen(readManualFromUrl());
       setLibFilter(readLibFilterFromUrl());
       setCandidateView(readCandidateViewFromUrl());
       setSortKey(readSortKeyFromUrl());
@@ -193,9 +221,18 @@ export function App() {
 
   const toggleAbout = (open: boolean) => {
     setAboutOpen(open);
+    if (!open) setLicensesOpen(false);
     const url = new URL(window.location.href);
     if (open) url.searchParams.set('about', '1');
     else url.searchParams.delete('about');
+    window.history.pushState({}, '', url);
+  };
+
+  const toggleManual = (open: boolean) => {
+    setManualOpen(open);
+    const url = new URL(window.location.href);
+    if (open) url.searchParams.set('manual', '1');
+    else url.searchParams.delete('manual');
     window.history.pushState({}, '', url);
   };
 
@@ -248,6 +285,9 @@ export function App() {
       setWhitelist(w);
       setLogs(l);
       setSettings(s);
+      apiFetch<UpdateCheckResult>('/api/updates')
+        .then(setUpdateInfo)
+        .catch(() => {});
       if (d.plexConfigured) {
         apiFetch<PlexLibrarySection[]>('/api/settings/libraries')
           .then(setLibraries)
@@ -403,11 +443,13 @@ export function App() {
           inactivityDays: settings.inactivityDays,
           scanIntervalDays: settings.scanIntervalDays,
           dryRun: settings.dryRun,
+          autoDeleteOnScan: settings.autoDeleteOnScan,
           deleteEmptyFolders: settings.deleteEmptyFolders,
           discordWebhookUrl: settings.discordWebhookUrl,
           appPublicUrl: settings.appPublicUrl,
           pathMappings: settings.pathMappings,
           excludedLibraries: settings.excludedLibraries,
+          updateChannel: settings.updateChannel,
         }),
       });
       setPlexTokenInput('');
@@ -451,6 +493,22 @@ export function App() {
       setNotice(t.settings.webhookSent);
     } catch (err) {
       reportError(lang === 'de' ? 'Discord-Test fehlgeschlagen' : 'Discord webhook test failed', err);
+    }
+  };
+
+  const handleCheckUpdates = async () => {
+    setCheckingUpdates(true);
+    setErrorState(null);
+    try {
+      const res = await apiFetch<UpdateCheckResult>('/api/updates?force=true');
+      setUpdateInfo(res);
+      if (res.error) {
+        reportError(lang === 'de' ? 'Update-Prüfung fehlgeschlagen' : 'Update check failed', res.error);
+      }
+    } catch (err) {
+      reportError(lang === 'de' ? 'Update-Prüfung fehlgeschlagen' : 'Update check failed', err);
+    } finally {
+      setCheckingUpdates(false);
     }
   };
 
@@ -617,6 +675,16 @@ export function App() {
               title={t.common.language}
             >
               {lang.toUpperCase()}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => toggleManual(true)}
+              className="p-2 text-[var(--c-text-muted)] hover:text-[var(--c-text)] cursor-pointer"
+              title={t.nav.manual}
+              aria-label={t.nav.manual}
+            >
+              <BookOpen className="w-4 h-4" />
             </button>
 
             <button
@@ -1232,6 +1300,16 @@ export function App() {
                 <label className="flex items-center gap-3 text-sm cursor-pointer">
                   <input
                     type="checkbox"
+                    checked={settings.autoDeleteOnScan}
+                    onChange={(e) => setSettings({ ...settings, autoDeleteOnScan: e.target.checked })}
+                    className="w-4 h-4 accent-[var(--c-danger)]"
+                  />
+                  <span>{t.settings.autoDeleteOnScan}</span>
+                </label>
+
+                <label className="flex items-center gap-3 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
                     checked={settings.deleteEmptyFolders}
                     onChange={(e) => setSettings({ ...settings, deleteEmptyFolders: e.target.checked })}
                     className="w-4 h-4 accent-[var(--c-toggle-on)]"
@@ -1374,6 +1452,117 @@ export function App() {
                   )}
                 </div>
               </section>
+
+              {/* Updates & Channel */}
+              <section className="xl:col-span-2 rounded-[10px] border border-[var(--c-border)] bg-[var(--c-surface)] p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-semibold">{t.settings.updatesSection}</h2>
+                    <p className="text-xs text-[var(--c-text-muted)] mt-0.5">{t.settings.updatesChannel}</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={checkingUpdates}
+                    onClick={handleCheckUpdates}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-[6px] border border-[var(--c-border)] bg-[var(--c-surface-alt)] text-xs font-medium disabled:opacity-50 cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${checkingUpdates ? 'animate-spin' : ''}`} />
+                    {checkingUpdates ? t.settings.checkingUpdates : t.settings.checkUpdates}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 rounded-[6px] border border-[var(--c-border)] bg-[var(--c-bg)] overflow-hidden">
+                  {(
+                    [
+                      {
+                        id: 'release' as UpdateChannel,
+                        label: t.settings.channelRelease,
+                        desc: t.settings.channelReleaseDesc,
+                        badge: null,
+                      },
+                      {
+                        id: 'beta' as UpdateChannel,
+                        label: t.settings.channelBeta,
+                        desc: t.settings.channelBetaDesc,
+                        badge: { text: 'β', cls: 'bg-[var(--c-badge-beta-bg)] text-[var(--c-badge-beta-text)]' },
+                      },
+                      {
+                        id: 'nightly' as UpdateChannel,
+                        label: t.settings.channelNightly,
+                        desc: t.settings.channelNightlyDesc,
+                        badge: { text: 'α', cls: 'bg-[var(--c-badge-nightly-bg)] text-[var(--c-badge-nightly-text)]' },
+                      },
+                    ] as const
+                  ).map((ch) => {
+                    const active = settings.updateChannel === ch.id;
+                    return (
+                      <button
+                        key={ch.id}
+                        type="button"
+                        onClick={() => setSettings({ ...settings, updateChannel: ch.id })}
+                        className={`relative p-3.5 text-left border-b sm:border-b-0 sm:border-r last:border-b-0 last:border-r-0 border-[var(--c-border)] cursor-pointer transition-colors ${
+                          active ? 'bg-[var(--c-surface)]' : 'hover:bg-[var(--c-surface)]/60'
+                        }`}
+                      >
+                        {active && (
+                          <span className="absolute left-0 right-0 top-0 h-[2.5px] bg-[var(--c-accent)]" />
+                        )}
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm ${active ? 'font-semibold text-[var(--c-text)]' : 'font-medium text-[var(--c-text-muted)]'}`}>
+                            {ch.label}
+                          </span>
+                          {ch.badge && (
+                            <span
+                              className={`inline-flex items-center justify-center w-5 h-5 rounded shrink-0 ${ch.badge.cls}`}
+                              aria-label={ch.badge.text}
+                            >
+                              <ChannelBadgeGlyph channel={ch.id as 'beta' | 'nightly'} />
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-[var(--c-text-muted)] mt-1">{ch.desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {updateInfo && !updateInfo.error && (
+                  <div className="rounded-[6px] border border-[var(--c-border)] bg-[var(--c-bg)] px-4 py-3 text-xs space-y-1">
+                    {updateInfo.updateAvailable && updateInfo.latestVersion ? (
+                      <>
+                        <div className="flex items-center gap-2 font-semibold text-[var(--c-accent)]">
+                          <span>{t.settings.updateAvailable.replace('{version}', updateInfo.latestVersion)}</span>
+                          {updateInfo.latestChannel === 'beta' && (
+                            <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold leading-none bg-[var(--c-badge-beta-bg)] text-[var(--c-badge-beta-text)]">
+                              Beta (β)
+                            </span>
+                          )}
+                          {updateInfo.latestChannel === 'nightly' && (
+                            <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold leading-none bg-[var(--c-badge-nightly-bg)] text-[var(--c-badge-nightly-text)]">
+                              Nightly (α)
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[var(--c-text-muted)]">
+                          {t.settings.updateUnraidSteps.replace('{tag}', updateInfo.dockerTag)}
+                        </div>
+                        {updateInfo.releaseUrl && (
+                          <a
+                            href={updateInfo.releaseUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block text-[var(--c-accent)] hover:underline font-medium pt-0.5"
+                          >
+                            {t.settings.openReleaseNotes} ↗
+                          </a>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-[var(--c-text-muted)]">{t.settings.upToDate}</div>
+                    )}
+                  </div>
+                )}
+              </section>
             </div>
           </div>
         )}
@@ -1382,35 +1571,184 @@ export function App() {
       {/* About modal */}
       {aboutOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[2px] p-4"
           onClick={() => toggleAbout(false)}
         >
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-sm rounded-[10px] border border-[var(--c-border)] bg-[var(--c-surface)] p-6 space-y-4"
+            aria-labelledby="about-title"
+            className="w-full max-w-md rounded-[10px] border border-[var(--c-border)] bg-[var(--c-surface)] shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold">{t.nav.about}</h2>
-            <div className="text-sm text-[var(--c-text-muted)] space-y-1">
-              <div>
-                {t.common.version}: <span className="font-mono text-[var(--c-text)]">{meta?.displayVersion ?? '0.1.0'}</span>
+            {/* Header with logo & close button */}
+            <div className="p-5 border-b border-[var(--c-border)] flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-[10px] bg-[#0f172a] border border-amber-500/30 flex items-center justify-center shrink-0">
+                  <svg viewBox="0 0 512 512" className="w-7 h-7" aria-hidden="true">
+                    <rect x="116" y="132" width="232" height="220" rx="28" fill="#1e293b" stroke="#f59e0b" strokeWidth="22" />
+                    <path d="M116 204h232M164 132v72M232 132v72M300 132v72" stroke="#f59e0b" strokeWidth="18" strokeLinecap="round" />
+                    <circle cx="232" cy="278" r="30" fill="#f59e0b" />
+                    <circle cx="364" cy="364" r="68" fill="#dc2626" />
+                    <path d="M336 346h56M348 346v-10h32v10M346 346l4 46h28l4-46" fill="none" stroke="#ffffff" strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 id="about-title" className="text-base font-semibold leading-tight">
+                    Plex Auto Remover
+                  </h2>
+                  <p className="text-xs text-[var(--c-text-muted)] mt-1 leading-snug">
+                    {t.common.aboutTagline}
+                  </p>
+                </div>
               </div>
-              <div className="pt-2">
-                {lang === 'de' ? 'Mit ' : 'Made with '}
-                <span className="text-[#4ade80]">♥</span>
-                {lang === 'de' ? ' gemacht' : ''}
-              </div>
-            </div>
-            <div className="flex justify-end">
               <button
                 type="button"
                 onClick={() => toggleAbout(false)}
-                className="px-4 py-2 rounded-[6px] border border-[var(--c-border)] text-sm font-medium cursor-pointer"
+                className="p-1.5 rounded-[6px] text-[var(--c-text-muted)] hover:text-[var(--c-text)] hover:bg-[var(--c-surface-alt)] cursor-pointer shrink-0"
+                aria-label={t.common.close}
               >
-                {t.common.close}
+                <X className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Details list */}
+            <div className="p-5 space-y-3 text-xs">
+              <div className="flex items-center justify-between py-1.5 border-b border-[var(--c-border)]">
+                <span className="text-[var(--c-text-muted)]">{t.common.version}</span>
+                <span className="font-mono font-medium text-[var(--c-text)]">
+                  {meta?.displayVersion ?? 'v2026.11.1.14.5747'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between py-1.5 border-b border-[var(--c-border)]">
+                <span className="text-[var(--c-text-muted)]">{t.common.aboutChannel}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-medium text-[var(--c-text)]">
+                    {settings?.updateChannel === 'beta'
+                      ? t.settings.channelBeta
+                      : settings?.updateChannel === 'nightly'
+                      ? t.settings.channelNightly
+                      : t.settings.channelRelease}
+                  </span>
+                  {settings?.updateChannel === 'beta' && (
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-[var(--c-badge-beta-bg)] text-[var(--c-badge-beta-text)]">
+                      <ChannelBadgeGlyph channel="beta" />
+                    </span>
+                  )}
+                  {settings?.updateChannel === 'nightly' && (
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-[var(--c-badge-nightly-bg)] text-[var(--c-badge-nightly-text)]">
+                      <ChannelBadgeGlyph channel="nightly" />
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="py-1.5 border-b border-[var(--c-border)]">
+                <div className="flex items-center justify-between">
+                  <span className="text-[var(--c-text-muted)]">{t.common.aboutLicense}</span>
+                  <button
+                    type="button"
+                    onClick={() => setLicensesOpen((v) => !v)}
+                    className="inline-flex items-center gap-1 font-medium text-[var(--c-accent)] hover:underline cursor-pointer"
+                  >
+                    <span>{t.common.aboutLicenseValue}</span>
+                    {licensesOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                {licensesOpen && (
+                  <div className="mt-2.5 p-3 rounded-[6px] bg-[var(--c-bg)] border border-[var(--c-border)] space-y-1.5">
+                    <div className="font-semibold text-[11px] text-[var(--c-text)] pb-1">
+                      {t.common.aboutThirdPartyTitle}
+                    </div>
+                    {[
+                      ['.NET 11 / ASP.NET Core', 'MIT'],
+                      ['Entity Framework Core SQLite', 'MIT'],
+                      ['SQLite', 'Public Domain'],
+                      ['React & React-DOM', 'MIT'],
+                      ['Vite', 'MIT'],
+                      ['TypeScript', 'Apache-2.0'],
+                      ['Tailwind CSS', 'MIT'],
+                      ['Lucide Icons', 'ISC'],
+                    ].map(([pkg, lic]) => (
+                      <div key={pkg} className="flex items-center justify-between text-[11px] text-[var(--c-text-muted)]">
+                        <span>{pkg}</span>
+                        <span className="font-mono text-[var(--c-text)]">{lic}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between py-1.5">
+                <span className="text-[var(--c-text-muted)]">{t.common.aboutRepo}</span>
+                <a
+                  href="https://github.com/sushiflux/Plex_Auto_Remover"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-[var(--c-accent)] hover:underline"
+                >
+                  sushiflux/Plex_Auto_Remover ↗
+                </a>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3.5 bg-[var(--c-surface-alt)]/60 border-t border-[var(--c-border)] flex items-center justify-between text-xs text-[var(--c-text-muted)]">
+              <span>
+                {lang === 'de' ? 'Mit ' : 'Made with '}
+                <span className="text-[#4ade80]">♥</span>
+                {lang === 'de' ? ' gemacht' : ''}
+              </span>
+              <span>© 2026 SushiFlux</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual PDF modal */}
+      {manualOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[2px] p-4"
+          onClick={() => toggleManual(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="manual-title"
+            className="w-full max-w-5xl h-[88vh] flex flex-col rounded-[10px] border border-[var(--c-border)] bg-[var(--c-surface)] shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-3.5 border-b border-[var(--c-border)] flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5">
+                <BookOpen className="w-5 h-5 text-[var(--c-accent)]" />
+                <h2 id="manual-title" className="text-base font-semibold">
+                  {t.common.manualTitle} (PDF)
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={`/api/manual/${lang}?download=1`}
+                  className="px-3 py-1.5 rounded-[6px] border border-[var(--c-border)] bg-[var(--c-surface-alt)] text-xs font-medium text-[var(--c-text)] hover:border-[var(--c-accent)]"
+                >
+                  PDF ↓
+                </a>
+                <button
+                  type="button"
+                  onClick={() => toggleManual(false)}
+                  className="p-1.5 rounded-[6px] text-[var(--c-text-muted)] hover:text-[var(--c-text)] hover:bg-[var(--c-surface-alt)] cursor-pointer"
+                  aria-label={t.common.close}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <iframe
+              src={`/api/manual/${lang}`}
+              title={t.common.manualTitle}
+              className="w-full flex-1 border-0 bg-[var(--c-bg)]"
+            />
           </div>
         </div>
       )}

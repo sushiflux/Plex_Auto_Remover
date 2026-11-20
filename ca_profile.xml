@@ -1,0 +1,14 @@
+<CommunityApplications>
+  <Profile>
+**Plex Auto Remover** by SushiFlux – smart storage cleanup for your Unraid Plex Media Server. Finds untouched movies and TV shows across all Plex profiles, lets you review them in a modern Web UI or auto-delete on schedule, and protects favorites permanently.
+
+Open source (MIT License). This repository holds the source code, the Unraid template (templates/plex-auto-remover.xml), the bilingual README and PDF manuals, and the releases. Questions and problems: see the support link.
+
+**Plex Auto Remover** von SushiFlux – intelligente Speicherbereinigung für deinen Unraid-Plex-Server. Findet unberührte Filme und Serien über alle Plex-Profile hinweg, lässt dich in einer modernen Web-GUI prüfen oder geplant automatisch löschen und schützt Lieblingstitel dauerhaft.
+
+Open Source (MIT-Lizenz). Dieses Repository enthält den Quellcode, das Unraid-Template (templates/plex-auto-remover.xml), die zweisprachige README samt PDF-Handbüchern und die Releases. Fragen und Probleme: siehe Support-Link.
+  </Profile>
+  <Icon>https://raw.githubusercontent.com/sushiflux/Plex_Auto_Remover/main/docs/icon.png</Icon>
+  <WebPage>https://github.com/sushiflux/Plex_Auto_Remover</WebPage>
+  <Forum>https://github.com/sushiflux/Plex_Auto_Remover</Forum>
+</CommunityApplications>
