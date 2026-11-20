@@ -1,0 +1,53 @@
+#!/bin/sh
+set -eu
+
+# Block staging anything from intern/
+if git diff --cached --name-only | grep -qE '^intern/'; then
+  echo "ERROR: Files under intern/ must never be committed." >&2
+  exit 1
+fi
+
+YEAR=$(date +%Y)
+MONTH=$(date +%-m)
+
+# Count commits of this calendar year + 1 for the upcoming commit
+if git rev-parse --verify HEAD >/dev/null 2>&1; then
+  COMMIT_COUNT=$(git rev-list --count --since="${YEAR}-01-01T00:00:00" HEAD)
+else
+  COMMIT_COUNT=0
+fi
+NEXT_COMMIT=$((COMMIT_COUNT + 1))
+
+# Prompt count from optional git-ignored counter file or default 1
+PROMPTS_FILE=".git/prompt-count"
+if [ -f "$PROMPTS_FILE" ]; then
+  PROMPTS=$(tr -d '[:space:]' < "$PROMPTS_FILE")
+else
+  PROMPTS=1
+fi
+case "$PROMPTS" in
+  ''|*[!0-9]*) PROMPTS=1 ;;
+esac
+
+# Changed lines in staged diff (excluding version.txt and binaries)
+CHANGED=$(git diff --cached --numstat -- . ':!version.txt' | awk '$1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ { s += $1 + $2 } END { print s + 0 }')
+
+SHORT_VER="v${YEAR}.${MONTH}.${NEXT_COMMIT}"
+FULL_VER="v${YEAR}.${MONTH}.${NEXT_COMMIT}.${PROMPTS}.${CHANGED}"
+
+printf "%s\n%s\n" "$SHORT_VER" "$FULL_VER" > version.txt
+git add version.txt
+
+# Stamp placeholder headings in customer changelogs if staged
+for f in CHANGELOG.md CHANGELOG.beta.md CHANGELOG.nightly.md; do
+  if [ -f "$f" ] && grep -qE '^## vNEXT' "$f"; then
+    sed -i "s/^## vNEXT/## ${FULL_VER}/g" "$f"
+    git add "$f"
+  fi
+done
+
+# Stamp dev changelog heading if present
+if [ -f "intern/CHANGELOG.dev.md" ] && grep -qE '^## Unreleased$' "intern/CHANGELOG.dev.md"; then
+  NOW_STAMP=$(date +"%Y-%m-%d %H:%M")
+  sed -i "s/^## Unreleased$/## ${FULL_VER} - ${NOW_STAMP}/" "intern/CHANGELOG.dev.md"
+fi
